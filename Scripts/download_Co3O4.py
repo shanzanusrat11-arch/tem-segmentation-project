@@ -1,7 +1,60 @@
 from pathlib import Path
-from urllib.request import urlopen, urlretrieve
+from urllib.request import Request, urlopen
 import json
+def download_with_resume(url, temporary_file):
+    """Download a large file and resume an interrupted download."""
 
+    existing_size = 0
+
+    if temporary_file.exists():
+        existing_size = temporary_file.stat().st_size
+
+    headers = {}
+
+    if existing_size > 0:
+        headers["Range"] = f"bytes={existing_size}-"
+        print(
+            f"Resuming from "
+            f"{existing_size / (1024 ** 2):.1f} MB..."
+        )
+
+    request = Request(
+        url,
+        headers=headers,
+    )
+
+    with urlopen(request, timeout=120) as response:
+
+        # A 206 response means the server accepted our Range request.
+        if existing_size > 0 and response.status == 206:
+            mode = "ab"
+        else:
+            # Server did not resume, so safely restart the .part file.
+            mode = "wb"
+            existing_size = 0
+
+        downloaded = existing_size
+        chunk_size = 8 * 1024 * 1024
+
+        with open(temporary_file, mode) as output_file:
+
+            while True:
+                chunk = response.read(chunk_size)
+
+                if not chunk:
+                    break
+
+                output_file.write(chunk)
+                downloaded += len(chunk)
+
+                print(
+                    f"\rDownloaded: "
+                    f"{downloaded / (1024 ** 2):.1f} MB",
+                    end="",
+                    flush=True,
+                )
+
+    print()
 
 # ==================================================
 # Project paths
@@ -176,10 +229,10 @@ for attempt in range(1, max_attempts + 1):
             f"{attempt}/{max_attempts}"
         )
 
-        urlretrieve(
-            download_urls[filename],
-            temporary_file,
-        )
+        download_with_resume(
+    download_urls[filename],
+    temporary_file,
+)
 
         temporary_file.replace(
             destination
@@ -194,8 +247,7 @@ for attempt in range(1, max_attempts + 1):
             f"{error}"
         )
 
-        if temporary_file.exists():
-            temporary_file.unlink()
+
 
         if attempt == max_attempts:
             raise
