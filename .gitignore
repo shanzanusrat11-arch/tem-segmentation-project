@@ -1,0 +1,16 @@
+# Python virtual environment
+.venv/
+
+# macOS files
+.DS_Store
+**/.DS_Store
+
+# Raw microscopy datasets
+Data/Raw/
+
+# Generated database
+Data/Database/*.db
+
+# Python cache
+__pycache__/
+*.pyc
