@@ -87,74 +87,26 @@ REQUIRED_FILES = [
 
 
 # ==================================================
-# Check whether files already exist
-# ==================================================
-
-def co3o4_is_complete():
-
-    for filename in REQUIRED_FILES:
-
-        file_path = CO3O4_DIR / filename
-
-        if not file_path.exists():
-            return False
-
-        if file_path.stat().st_size == 0:
-            return False
-
-    return True
-
-
-# ==================================================
-# Skip download when files already exist
-# ==================================================
-
-print()
-print("Co3O4 DOWNLOAD")
-print("==============")
-
-if co3o4_is_complete():
-
-    print("Co3O4 dataset already exists.")
-
-    for filename in REQUIRED_FILES:
-
-        file_path = CO3O4_DIR / filename
-
-        size_mb = (
-            file_path.stat().st_size
-            / (1024 * 1024)
-        )
-
-        print(
-            f"{filename}: "
-            f"{size_mb:.1f} MB"
-        )
-
-    print("No download required.")
-
-    raise SystemExit(0)
-
 
 # ==================================================
 # Retrieve official Zenodo metadata
 # ==================================================
 
-print(
-    "Retrieving file information "
-    "from Zenodo..."
-)
+print()
+print("Co3O4 DOWNLOAD")
+print("==============")
+print("Retrieving file information from Zenodo...")
 
 with urlopen(ZENODO_API_URL) as response:
-
     metadata = json.load(response)
 
 
 # ==================================================
-# Find download URLs
+# Find download URLs and expected file sizes
 # ==================================================
 
 download_urls = {}
+expected_sizes = {}
 
 for file_info in metadata["files"]:
 
@@ -166,6 +118,10 @@ for file_info in metadata["files"]:
             file_info["links"]["self"]
         )
 
+        expected_sizes[filename] = (
+            file_info["size"]
+        )
+
 
 for filename in REQUIRED_FILES:
 
@@ -175,6 +131,31 @@ for filename in REQUIRED_FILES:
             f"{filename} was not found "
             "in the Zenodo record."
         )
+
+
+# ==================================================
+# Check whether a downloaded file is complete
+# ==================================================
+
+def file_is_complete(filename):
+
+    file_path = CO3O4_DIR / filename
+
+    if not file_path.exists():
+        return False
+
+    return (
+        file_path.stat().st_size
+        == expected_sizes[filename]
+    )
+
+
+def co3o4_is_complete():
+
+    return all(
+        file_is_complete(filename)
+        for filename in REQUIRED_FILES
+    )
 
 
 # ==================================================
@@ -193,70 +174,115 @@ CO3O4_DIR.mkdir(
 
 for filename in REQUIRED_FILES:
 
-    destination = (
-        CO3O4_DIR
-        / filename
-    )
+    destination = CO3O4_DIR / filename
+    temporary_file = CO3O4_DIR / f"{filename}.part"
 
-    if (
-        destination.exists()
-        and destination.stat().st_size > 0
-    ):
+    expected_size = expected_sizes[filename]
+
+    # --------------------------------------------------
+    # Skip a file only when its size is exactly correct
+    # --------------------------------------------------
+
+    if file_is_complete(filename):
+
+        size_mb = (
+            destination.stat().st_size
+            / (1024 * 1024)
+        )
 
         print(
-            f"{filename} already exists. "
-            "Skipping."
+            f"{filename} already exists and is complete "
+            f"({size_mb:.1f} MB). Skipping."
         )
 
         continue
 
-    temporary_file = (
-        CO3O4_DIR
-        / f"{filename}.part"
-    )
+    # --------------------------------------------------
+    # If an incomplete final file exists, turn it back
+    # into a .part file so the download can resume.
+    # --------------------------------------------------
+
+    if destination.exists():
+
+        current_size = destination.stat().st_size
+
+        print(
+            f"{filename} is incomplete "
+            f"({current_size / (1024 ** 2):.1f} MB)."
+        )
+
+        if current_size < expected_size:
+
+            if temporary_file.exists():
+                temporary_file.unlink()
+
+            destination.replace(temporary_file)
+
+            print(
+                "Incomplete file moved to .part "
+                "so the download can resume."
+            )
+
+        else:
+
+            destination.unlink()
+
+            if temporary_file.exists():
+                temporary_file.unlink()
+
+            print(
+                "Invalid oversized file removed. "
+                "Download will restart."
+            )
 
     print()
     print(f"Downloading {filename}...")
 
     max_attempts = 5
 
-for attempt in range(1, max_attempts + 1):
+    for attempt in range(1, max_attempts + 1):
 
-    try:
+        try:
 
-        print(
-            f"Download attempt "
-            f"{attempt}/{max_attempts}"
-        )
+            print(
+                f"Download attempt "
+                f"{attempt}/{max_attempts}"
+            )
 
-        download_with_resume(
-    download_urls[filename],
-    temporary_file,
-)
+            download_with_resume(
+                download_urls[filename],
+                temporary_file,
+            )
 
-        temporary_file.replace(
-            destination
-        )
+            actual_size = temporary_file.stat().st_size
 
-        break
+            if actual_size != expected_size:
 
-    except Exception as error:
+                raise RuntimeError(
+                    f"Incomplete download for {filename}: "
+                    f"expected {expected_size} bytes, "
+                    f"got {actual_size} bytes."
+                )
 
-        print(
-            f"Download attempt {attempt} failed: "
-            f"{error}"
-        )
+            temporary_file.replace(destination)
 
+            print(
+                f"{filename} download complete."
+            )
 
+            break
 
-        if attempt == max_attempts:
-            raise
+        except Exception as error:
 
-        print("Retrying download...")
+            print(
+                f"Download attempt {attempt} failed: "
+                f"{error}"
+            )
 
-    print(
-        f"{filename} download complete."
-    )
+            if attempt == max_attempts:
+                raise
+
+            print("Retrying download...")
 
 
 # ==================================================
@@ -267,7 +293,7 @@ if not co3o4_is_complete():
 
     raise RuntimeError(
         "Co3O4 download completed, "
-        "but required files are missing."
+        "but one or more files have an incorrect size."
     )
 
 
@@ -294,4 +320,4 @@ for filename in REQUIRED_FILES:
     )
 
 print()
-print("Required Co3O4 files are available.")
+print("All Co3O4 files verified successfully.")
