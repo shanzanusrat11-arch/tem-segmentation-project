@@ -137,7 +137,7 @@ just
 ```
 
 The `Justfile` builds the container and runs the Makefile inside it.
-
+**Note:** The first run downloads several gigabytes of public microscopy data and may take considerable time depending on network speed. Interrupted Co3O4 downloads can be resumed. Subsequent runs reuse successfully downloaded data.
 The workflow is:
 
 ```text
@@ -162,9 +162,7 @@ create_database.py
 Data/Database/microscopy.db
 ```
 
-The download scripts check whether the required data already exist before downloading them. Therefore, rerunning the pipeline does not intentionally duplicate the raw datasets.
-
-The database-generation step recreates the SQLite database deterministically so that repeated runs produce the expected 751 database records.
+The download scripts check whether the required data already exist and are complete before downloading them. Repeated runs reuse existing valid data rather than duplicating the raw datasets. The database is recreated deterministically on each run, producing the same expected 751 records.
 
 ## ETL Process
 
@@ -177,7 +175,7 @@ Scripts/download_EMPS.py
 Scripts/download_HRTEM.py
 Scripts/download_Co3O4.py
 ```
-
+Large Co3O4 downloads support retry/resume behavior, and downloaded files are validated against the file sizes reported by the Zenodo record.
 ### Transform
 
 Dataset-specific information is standardized into a common representation. This includes file paths, label types, microscopy metadata, material information, image dimensions, physical scale information where available, and dataset split information.
