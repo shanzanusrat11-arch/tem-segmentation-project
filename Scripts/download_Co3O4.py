@@ -165,7 +165,16 @@ for filename in REQUIRED_FILES:
     print()
     print(f"Downloading {filename}...")
 
+    max_attempts = 5
+
+for attempt in range(1, max_attempts + 1):
+
     try:
+
+        print(
+            f"Download attempt "
+            f"{attempt}/{max_attempts}"
+        )
 
         urlretrieve(
             download_urls[filename],
@@ -176,12 +185,22 @@ for filename in REQUIRED_FILES:
             destination
         )
 
-    except Exception:
+        break
+
+    except Exception as error:
+
+        print(
+            f"Download attempt {attempt} failed: "
+            f"{error}"
+        )
 
         if temporary_file.exists():
             temporary_file.unlink()
 
-        raise
+        if attempt == max_attempts:
+            raise
+
+        print("Retrying download...")
 
     print(
         f"{filename} download complete."
