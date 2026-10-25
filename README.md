@@ -223,3 +223,43 @@ The database produced by this ETL pipeline will serve as the data foundation for
 6. particle-size and morphology analysis.
 
 This repository currently focuses on the reproducible data acquisition and database-generation stage of the project.
+## ETL Part II — tensors for segmentation
+
+Run `just pipeline` to acquire data, recreate the 751-record SQLite database,
+and export **EMPS-only** binary semantic-segmentation tensors to:
+
+- `data/inputs/train.safetensors`
+- `data/inputs/eval.safetensors`
+- `data/inputs/manifest.json` (sample IDs, source paths, group IDs, folds, split method)
+
+Run `just check` to validate all tensor shapes, types, masks, database IDs,
+training/evaluation group separation, duplicate-image separation, and 5-fold
+cross-validation group assignments. `just` by itself still performs Part I.
+
+Tensor images are 8-bit grayscale `[N, 1, 256, 256]`; binary masks have the
+same shape and contain 0/1. Conversion uses bilinear interpolation for images
+and nearest-neighbor interpolation for binary masks. Intensity normalization
+(e.g. `images.float() / 255`) belongs in the training code.
+
+**Group splitting:** The script groups samples sharing a filename-family prefix
+or exactly identical image pixels. If EMPS's supplied train/test assignment
+keeps these derived groups separate, it is retained; otherwise a seeded
+80/20 group split is created. Five seeded folds are assigned to **training
+groups only**. This is an auditable safeguard against known/derived overlaps,
+**not proof of acquisition-level independence**: EMPS does not provide verified
+acquisition group IDs in the Part I database. Check original source metadata
+before interpreting evaluation results as fully acquisition-independent.
+
+Example PyTorch consumption (PyTorch is installed in your training environment,
+not required to generate or validate the files):
+
+```python
+from safetensors.torch import load_file
+from torch.utils.data import TensorDataset, DataLoader
+s = load_file('data/inputs/train.safetensors')
+loader = DataLoader(TensorDataset(s['images'].float() / 255,
+                                  s['masks'].float()), batch_size=8, shuffle=True)
+```
+
+The tensor files are generated artifacts and are excluded from Git. Re-running
+`just pipeline` overwrites them deterministically from source data.
