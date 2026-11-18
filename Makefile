@@ -1,5 +1,5 @@
 .PHONY: all data emps hrtem co3o4 database pipeline check clean
-all: data database
+all: emps database
 
 data: emps hrtem co3o4
 emps:
@@ -16,3 +16,10 @@ check:
 	python src/check_tensors.py
 clean:
 	rm -f Data/Database/microscopy.db data/inputs/*.safetensors data/inputs/manifest.json
+
+# Model & Report Part I: ETL -> tensors -> validation -> training -> results -> PDF
+.PHONY: submission
+submission: pipeline
+	python src/check_tensors.py
+	python src/train_report.py
+	test -s artifacts/results.json && test -s report.pdf

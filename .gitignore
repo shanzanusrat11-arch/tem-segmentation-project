@@ -5,3 +5,5 @@ __pycache__/
 Data/Raw/
 Data/Database/*.db
 data/inputs/
+artifacts/
+report.pdf
