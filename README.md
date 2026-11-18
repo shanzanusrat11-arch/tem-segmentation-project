@@ -263,3 +263,52 @@ loader = DataLoader(TensorDataset(s['images'].float() / 255,
 
 The tensor files are generated artifacts and are excluded from Git. Re-running
 `just pipeline` overwrites them deterministically from source data.
+## Model Training and Automated Report
+
+This project extends the reproducible microscopy ETL pipeline to train and evaluate a U-Net model for nanoparticle segmentation in transmission electron microscopy (TEM) images.
+
+### Model and Dataset
+
+- **Dataset:** EMPS electron microscopy images with corresponding segmentation masks.
+- **Architecture:** A compact U-Net implemented using PyTorch.
+- **Training:** Binary cross-entropy (BCE) combined with soft Dice loss, optimized using Adam.
+- **Data splitting:** 366 training-set image/mask pairs, with a group-aware validation subset, and 99 held-out test pairs.
+- **Evaluation metrics:** Dice coefficient and Intersection over Union (IoU).
+
+### Baseline Comparisons
+
+The U-Net is evaluated against two reference methods:
+
+1. **Negative control:** An all-background segmentation predictor.
+2. **Classical comparator:** Otsu thresholding, a traditional image segmentation method.
+
+### Automated Pipeline
+
+The entire pipeline can be executed using:
+
+```bash
+just
+```
+
+This command runs the data preparation, database creation, tensor generation, model training, evaluation, and report generation steps.
+
+The pipeline automatically generates:
+
+- `artifacts/results.json` — Model evaluation results.
+- `artifacts/loss.png` — Training and validation loss curves.
+- `artifacts/predictions.png` — Example segmentation predictions compared with ground truth and Otsu thresholding.
+- `report.pdf` — Automatically generated report containing the methodology, evaluation results, figures, and discussion.
+
+### Model Performance
+
+In the 30-epoch experiment, the U-Net achieved the following results on the held-out test set:
+
+| Method | Mean Dice | Mean IoU |
+|---|---:|---:|
+| U-Net | 0.6173 | 0.4746 |
+| All-background negative control | 0.0000 | 0.0000 |
+| Otsu thresholding | 0.2979 | 0.2338 |
+
+These results demonstrate that the trained U-Net outperformed both comparison methods. Future improvements may include data augmentation, architecture optimization, and additional training experiments.
+
+**Note:** The default number of training epochs is configured in `src/train_report.py` and can be overridden using the `TEM_EPOCHS` environment variable.
